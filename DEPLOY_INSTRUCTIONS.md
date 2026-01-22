@@ -28,3 +28,14 @@ Esto se hace normalmente en el panel de control de tu hosting (Vercel, Netlify, 
 ### Opción B: Hostinger (VPS / Node.js)
 1. Si usas panel (ej: CyberPanel, hPanel): Busca la sección de **Variables de Entorno** o **Environment**.
 2. Si lo subes por FTP/SSH: Crea un archivo llamado `.env` en la carpeta raíz del servidor y asegúrate de que tenga ambas líneas.
+
+
+## Arreglo Error 503 (Importante)
+
+Si te sale error 503 o la web no carga, es porque Hostinger no sabe arrancar Next.js.
+
+Cambia la configuracin de **Startup File** en tu panel:
+
+1. Ve a la seccin **Node.js** de tu panel.
+2. Donde pone 'Startup File' (o Archivo de Inicio), escribe: **server.js**
+3. Guarda y Reinicia la aplicacin.
