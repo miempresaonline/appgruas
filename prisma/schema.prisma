@@ -1,0 +1,124 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Municipio {
+  id        String   @id @default(cuid())
+  nombre    String
+  cif       String?
+  direccion String?
+  email     String?
+  telefono  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tarifas   Tarifa[]
+  albaranes Albaran[]
+}
+
+model Servicio {
+  id          String   @id @default(cuid())
+  nombre      String   // "Arrastre", "Enganche"
+  descripcion String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tarifas     Tarifa[]
+  albaranes   Albaran[]
+}
+
+model Infraccion {
+  id          String   @id @default(cuid())
+  codigo      String
+  descripcion String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  albaranes   Albaran[]
+}
+
+model Tarifa {
+  id           String      @id @default(cuid())
+  municipioId  String
+  servicioId   String
+  precioBase   Decimal
+  municipio    Municipio   @relation(fields: [municipioId], references: [id])
+  servicio     Servicio    @relation(fields: [servicioId], references: [id])
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@unique([municipioId, servicioId])
+}
+
+model Marca {
+  id        String    @id @default(cuid())
+  nombre    String    @unique
+  modelos   Modelo[]
+}
+
+model Modelo {
+  id        String    @id @default(cuid())
+  nombre    String
+  marcaId   String
+  marca     Marca     @relation(fields: [marcaId], references: [id])
+  
+  @@unique([marcaId, nombre])
+}
+
+model Albaran {
+  id              String      @id @default(cuid()) // Server ID
+  tempId          String?     // Client-side ID for sync matching
+  numeroAlbaran   Int?        @unique @default(autoincrement())
+  
+  municipioId     String
+  municipio       Municipio   @relation(fields: [municipioId], references: [id])
+  
+  servicioId      String
+  servicio        Servicio    @relation(fields: [servicioId], references: [id])
+  
+  infraccionId    String
+  infraccion      Infraccion  @relation(fields: [infraccionId], references: [id])
+
+  calle           String?
+  ciudad          String?
+  geoLat          Float?
+  geoLng          Float?
+
+  fechaInicio     DateTime
+  fechaFin        DateTime?
+
+  policiaPlaca    String?
+  policiaFirma    String?     // Base64 or URL
+
+  estado          String      @default("PENDIENTE") // PENDIENTE, SINCRONIZADO, FACTURADO
+  
+  vehiculos       VehiculoRetirado[]
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model VehiculoRetirado {
+  id              String      @id @default(cuid())
+  albaranId       String
+  albaran         Albaran     @relation(fields: [albaranId], references: [id])
+  
+  matricula       String
+  marca           String?     // Denormalized for easier reporting if master data changes
+  modelo          String?
+  
+  esMoto          Boolean     @default(false)
+  esSobrepeso     Boolean     @default(false)
+  
+  fotos           Foto[]
+}
+
+model Foto {
+  id                 String           @id @default(cuid())
+  vehiculoRetiradoId String
+  vehiculoRetirado   VehiculoRetirado @relation(fields: [vehiculoRetiradoId], references: [id])
+  url                String
+  tipo               String?          // "FRONTAL", "TRASERA", etc.
+}
