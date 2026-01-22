@@ -1,40 +1,51 @@
 const { createServer } = require('http');
 const { parse } = require('url');
 const next = require('next');
+const fs = require('fs');
+const path = require('path');
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = 'localhost';
 const port = process.env.PORT || 3000;
-// when using middleware `hostname` and `port` must be provided below
-const app = next({ dev, hostname, port });
-const handle = app.getRequestHandler();
 
-app.prepare().then(() => {
-    createServer(async (req, res) => {
-        try {
-            // Be sure to pass `true` as the second argument to `url.parse`.
-            // This tells it to parse the query portion of the URL.
-            const parsedUrl = parse(req.url, true);
-            const { pathname, query } = parsedUrl;
+function logError(error) {
+    const logPath = path.join(__dirname, 'app-error.log');
+    const msg = `[${new Date().toISOString()}] ERROR: ${error.stack || error}\n`;
+    fs.appendFileSync(logPath, msg);
+    console.error(error);
+}
 
-            if (pathname === '/a') {
-                await app.render(req, res, '/a', query);
-            } else if (pathname === '/b') {
-                await app.render(req, res, '/b', query);
-            } else {
-                await handle(req, res, parsedUrl);
+try {
+    const app = next({ dev, hostname, port });
+    const handle = app.getRequestHandler();
+
+    app.prepare().then(() => {
+        createServer(async (req, res) => {
+            try {
+                const parsedUrl = parse(req.url, true);
+                if (parsedUrl.pathname === '/a') {
+                    await app.render(req, res, '/a', parsedUrl.query);
+                } else if (parsedUrl.pathname === '/b') {
+                    await app.render(req, res, '/b', parsedUrl.query);
+                } else {
+                    await handle(req, res, parsedUrl);
+                }
+            } catch (err) {
+                logError(err);
+                res.statusCode = 500;
+                res.end('internal server error');
             }
-        } catch (err) {
-            console.error('Error occurred handling', req.url, err);
-            res.statusCode = 500;
-            res.end('internal server error');
-        }
-    })
-        .once('error', (err) => {
-            console.error(err);
-            process.exit(1);
         })
-        .listen(port, () => {
-            console.log(`> Ready on http://${hostname}:${port}`);
-        });
-});
+            .once('error', (err) => {
+                logError(err);
+                process.exit(1);
+            })
+            .listen(port, () => {
+                console.log(`> Ready on http://${hostname}:${port}`);
+            });
+    }).catch(err => {
+        logError("Failed to prepare Next.js app: " + err);
+    });
+} catch (err) {
+    logError("Fatal startup error: " + err);
+}
