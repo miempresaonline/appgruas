@@ -2,10 +2,11 @@
   "name": "gruas-municipal",
   "version": "0.1.0",
   "private": true,
+  "main": "index.js",
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
-    "start": "node app.js",
+    "start": "node index.js",
     "start-server": "node server.js",
     "lint": "eslint"
   },
