@@ -9,7 +9,7 @@ const hostname = 'localhost';
 const port = process.env.PORT || 3000;
 
 function logError(error) {
-    const logPath = path.join(__dirname, 'app-error.log');
+    const logPath = path.join(__dirname, 'public', 'app-error_log.txt');
     const msg = `[${new Date().toISOString()}] ERROR: ${error.stack || error}\n`;
     fs.appendFileSync(logPath, msg);
     console.error(error);
