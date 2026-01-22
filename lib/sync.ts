@@ -58,6 +58,7 @@ export function useSyncManager() {
 
         } catch (e) {
             console.error("Sync Process Failed:", e);
+            alert("Error de Sincronización: " + String(e));
         }
     };
 
