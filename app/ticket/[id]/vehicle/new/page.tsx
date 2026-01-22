@@ -5,16 +5,15 @@ import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { CameraCapture } from '@/components/pwa/CameraCapture';
-import { ArrowLeft, ScanText, Save, Loader2 } from 'lucide-react';
+import { ArrowLeft, ScanText, Save, Loader2, Sparkles } from 'lucide-react';
 import { db } from '@/lib/db';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { createWorker } from 'tesseract.js';
 import { v4 as uuidv4 } from 'uuid';
 
-// Helper to convert File to Base64 for storage (Dexie handles Blobs well but Base64 is safer for simple JSON stores)
+// Helper to convert File to Base64
 const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -26,8 +25,6 @@ const fileToBase64 = (file: File): Promise<string> => {
 
 export default function NewVehiclePage() {
     const { id } = useParams();
-    // Ensure ticketId is a string. useParams can return string | string[] | undefined.
-    // In this route [id] should be present, but we safeguard against undefined.
     const ticketId = (Array.isArray(id) ? id[0] : id) || '';
     const router = useRouter();
 
@@ -49,25 +46,34 @@ export default function NewVehiclePage() {
 
     const handleOCR = async () => {
         if (files.length === 0) {
-            alert("Primero toma na foto del vehículo (frontal)");
+            alert("Primero toma una foto del vehículo (frontal)");
             return;
         }
+
         setOcrLoading(true);
         try {
-            const worker = await createWorker('spa');
-            const ret = await worker.recognize(files[0]);
-            // Simple regex to find license plate like pattern **** *** or E **** ***
-            const text = ret.data.text.replace(/[^A-Z0-9]/g, '');
-            // Heuristic: Take last 7 chars if long enough
-            if (text.length >= 7) {
-                setMatricula(text.slice(-7));
+            // Convert first image to base64
+            const base64Image = await fileToBase64(files[0]);
+
+            const response = await fetch('/api/analyze-plate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: base64Image })
+            });
+
+            const data = await response.json();
+
+            if (data.error) throw new Error(data.error);
+
+            if (data.plate && data.plate !== 'NOT_FOUND') {
+                setMatricula(data.plate);
             } else {
-                setMatricula(text);
+                alert("No se detectó ninguna matrícula clara en la imagen.");
             }
-            await worker.terminate();
+
         } catch (e) {
             console.error(e);
-            alert("Error al leer matrícula");
+            alert("Error al analizar la imagen: " + String(e));
         } finally {
             setOcrLoading(false);
         }
@@ -102,6 +108,9 @@ export default function NewVehiclePage() {
         router.back();
     };
 
+    const marcaOptions = marcas?.map((m: any) => ({ value: m.id, label: m.nombre })) || [];
+    const modeloOptions = modelos?.map((m: any) => ({ value: m.id, label: m.nombre })) || [];
+
     return (
         <div className="min-h-screen bg-slate-50 pb-20">
             <header className="bg-white border-b px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
@@ -128,14 +137,14 @@ export default function NewVehiclePage() {
                             size="sm"
                             onClick={handleOCR}
                             disabled={ocrLoading || files.length === 0}
-                            className="h-8 text-xs"
+                            className="h-8 text-xs border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100"
                         >
-                            {ocrLoading ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <ScanText className="mr-2 h-3 w-3" />}
-                            Leer con Cámara
+                            {ocrLoading ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Sparkles className="mr-2 h-3 w-3" />}
+                            IA Scan
                         </Button>
                     </div>
                     <Input
-                        className="text-2xl font-mono uppercase tracking-widest text-center h-14 font-bold"
+                        className="text-3xl font-mono uppercase tracking-widest text-center h-16 font-black"
                         placeholder="0000XXX"
                         value={matricula}
                         onChange={(e) => setMatricula(e.target.value.toUpperCase())}
@@ -148,40 +157,38 @@ export default function NewVehiclePage() {
 
                     <div className="space-y-2">
                         <Label>Marca</Label>
-                        <Select onValueChange={setMarcaId} value={marcaId}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Seleccionar..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {marcas?.map((m: any) => (
-                                    <SelectItem key={m.id} value={m.id}>{m.nombre}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                            label="Marca"
+                            options={marcaOptions}
+                            value={marcaId}
+                            onChange={(val) => {
+                                setMarcaId(val);
+                                setModeloId(''); // Reset model when make changes
+                            }}
+                            placeholder="Buscar marca..."
+                        />
                     </div>
 
                     <div className="space-y-2">
                         <Label>Modelo</Label>
-                        <Select onValueChange={setModeloId} value={modeloId} disabled={!marcaId}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Seleccionar..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {modelos?.map((m: any) => (
-                                    <SelectItem key={m.id} value={m.id}>{m.nombre}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                            label="Modelo"
+                            options={modeloOptions}
+                            value={modeloId}
+                            onChange={setModeloId}
+                            disabled={!marcaId}
+                            placeholder="Buscar modelo..."
+                        />
                     </div>
 
                     <div className="flex gap-4 pt-2">
-                        <div className="flex items-center space-x-2 border p-3 rounded-md flex-1 justify-center">
+                        <div className="flex items-center space-x-2 border p-3 rounded-md flex-1 justify-center bg-slate-50">
                             <Checkbox id="moto" checked={esMoto} onCheckedChange={(c) => setEsMoto(!!c)} />
                             <label htmlFor="moto" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                                 Motocicleta
                             </label>
                         </div>
-                        <div className="flex items-center space-x-2 border p-3 rounded-md flex-1 justify-center">
+                        <div className="flex items-center space-x-2 border p-3 rounded-md flex-1 justify-center bg-slate-50">
                             <Checkbox id="peso" checked={esSobrepeso} onCheckedChange={(c) => setEsSobrepeso(!!c)} />
                             <label htmlFor="peso" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                                 Sobrepeso
@@ -190,7 +197,7 @@ export default function NewVehiclePage() {
                     </div>
                 </section>
 
-                <Button size="lg" className="w-full font-bold text-lg" onClick={handleSave}>
+                <Button size="lg" className="w-full font-bold text-lg h-12 shadow-lg shadow-indigo-200" onClick={handleSave}>
                     Guardar Vehículo <Save className="ml-2 h-5 w-5" />
                 </Button>
 
@@ -198,3 +205,4 @@ export default function NewVehiclePage() {
         </div>
     );
 }
+
