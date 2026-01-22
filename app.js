@@ -1,27 +1,29 @@
-const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
 
-const port = process.env.PORT || 3000;
+// Path to write the dump
+const logPath = path.join(__dirname, 'public', 'env_dump.txt');
 
-// Log startup attempt immediately
 try {
-    const logPath = path.join(__dirname, 'public', 'smoke.txt');
-    fs.writeFileSync(logPath, `Server attempting start at ${new Date().toISOString()} on port ${port}\n`);
+    // Dump all environment variables
+    const envData = JSON.stringify(process.env, null, 2);
+    const content = `TIMESTAMP: ${new Date().toISOString()}\n\nPROCESS.ENV:\n${envData}`;
+
+    // Write synchronously to ensure it exists before crash
+    fs.writeFileSync(logPath, content);
+    console.log("Environment dumped to " + logPath);
 } catch (e) {
-    console.error("Could not write smoke log", e);
+    console.error("Failed to dump env", e);
 }
 
+// Minimal keep-alive attempt
+const port = process.env.PORT || 3000;
 const server = http.createServer((req, res) => {
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'text/plain');
-    res.end('HOLA! Node.js funciona desde app.js. Puerto: ' + port);
+    res.end('Env Dumped. Check /env_dump.txt');
 });
 
+// Try to listen, but expects crash if 3000 is blocked
 server.listen(port, () => {
-    console.log(`Server running at port ${port}`);
-    try {
-        const logPath = path.join(__dirname, 'public', 'smoke.txt');
-        fs.appendFileSync(logPath, `Server LISTENING on port ${port}\n`);
-    } catch (e) { }
+    console.log(`Listening on ${port}`);
 });
