@@ -9,34 +9,59 @@ export function InstallPrompt() {
     const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
     const [isVisible, setIsVisible] = useState(false);
 
+    const [isIOS, setIsIOS] = useState(false);
+
     useEffect(() => {
+        // Check if device is iOS
+        const userAgent = window.navigator.userAgent.toLowerCase();
+        const isIphone = /iphone|ipad|ipod/.test(userAgent);
+        setIsIOS(isIphone);
+
         const handler = (e: any) => {
             // Prevent the mini-infobar from appearing on mobile
             e.preventDefault();
             // Stash the event so it can be triggered later.
             setDeferredPrompt(e);
+            console.log("PWA Install Prompt captured");
             // Update UI notify the user they can install the PWA
             setIsVisible(true);
         };
 
         window.addEventListener('beforeinstallprompt', handler);
 
+        // Always show for iOS if not in standalone mode
+        if (isIphone && !(window.navigator as any).standalone) {
+            setIsVisible(true);
+        }
+
         return () => window.removeEventListener('beforeinstallprompt', handler);
     }, []);
 
     const handleInstallClick = async () => {
-        if (!deferredPrompt) return;
+        if (isIOS) {
+            alert("Para instalar en iOS:\n1. Pulsa el botón 'Compartir' (cuadrado con flecha)\n2. Busca y pulsa 'Añadir a Inicio'");
+            return;
+        }
 
-        // Show the install prompt
-        deferredPrompt.prompt();
+        if (!deferredPrompt) {
+            console.error("No deferred prompt found");
+            return;
+        }
 
-        // Wait for the user to respond to the prompt
-        const { outcome } = await deferredPrompt.userChoice;
-        console.log(`User response to the install prompt: ${outcome}`);
+        try {
+            // Show the install prompt
+            deferredPrompt.prompt();
 
-        // We've used the prompt, and can't use it again, discard it
-        setDeferredPrompt(null);
-        setIsVisible(false);
+            // Wait for the user to respond to the prompt
+            const { outcome } = await deferredPrompt.userChoice;
+            console.log(`User response to the install prompt: ${outcome}`);
+
+            // We've used the prompt, and can't use it again, discard it
+            setDeferredPrompt(null);
+            setIsVisible(false);
+        } catch (err) {
+            console.error("Error showing install prompt:", err);
+        }
     };
 
     if (!isVisible) return null;
