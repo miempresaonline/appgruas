@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
-    "start": "node server.js",
+    "start": "node standalone-test.js",
     "start-server": "node server.js",
     "lint": "eslint"
   },
