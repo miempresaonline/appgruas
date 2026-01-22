@@ -32,7 +32,8 @@ async function saveBase64Image(base64Data: string, prefix: string): Promise<stri
         return `/uploads/${fileName}`;
 
     } catch (e) {
-        console.error("Error saving image:", e);
+        console.error("Error saving image (likely filesystem permission issue):", e);
+        // Return null so the ticket process continues without the image
         return null;
     }
 }
