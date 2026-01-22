@@ -36,10 +36,27 @@ export default function NewTicketPage() {
 
         // Geolocate
         if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition((pos) => {
-                // Placeholder: Reverse Geocoding would go here
-                // For now just storing coords if needed, or mocking address
-                console.log(pos.coords);
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                const { latitude, longitude } = pos.coords;
+                try {
+                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+                    const data = await res.json();
+
+                    if (data.address) {
+                        const road = data.address.road || '';
+                        const number = data.address.house_number || '';
+                        const fullStreet = `${road} ${number}`.trim();
+                        // Nominatim returns different fields for city depending on size
+                        const cityName = data.address.city || data.address.town || data.address.village || data.address.municipality || '';
+
+                        if (fullStreet) setCalle(fullStreet);
+                        if (cityName) setCiudad(cityName);
+                    }
+                } catch (error) {
+                    console.error("Error reverse geocoding:", error);
+                }
+            }, (err) => {
+                console.warn("Geolocation error:", err);
             });
         }
 
