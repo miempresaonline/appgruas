@@ -1,6 +1,41 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { LocalTicket, LocalVehicle } from '@/lib/types';
+import fs from 'fs';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
+
+// Helper to save Base64 string as file
+async function saveBase64Image(base64Data: string, prefix: string): Promise<string | null> {
+    if (!base64Data || !base64Data.startsWith('data:image')) return null;
+
+    try {
+        // Extract content type and data
+        const matches = base64Data.match(/^data:image\/([a-zA-Z+]+);base64,(.+)$/);
+        if (!matches || matches.length !== 3) return null;
+
+        const ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+        const buffer = Buffer.from(matches[2], 'base64');
+
+        const fileName = `${prefix}_${uuidv4()}.${ext}`;
+        const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+
+        // Ensure directory exists
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+
+        const filePath = path.join(uploadDir, fileName);
+        await fs.promises.writeFile(filePath, buffer);
+
+        // Return public URL (relative)
+        return `/uploads/${fileName}`;
+
+    } catch (e) {
+        console.error("Error saving image:", e);
+        return null;
+    }
+}
 
 export async function POST(request: Request) {
     try {
@@ -24,8 +59,42 @@ export async function POST(request: Request) {
                 continue;
             }
 
-            // Create new Albaran and Vehicles
             try {
+                // 1. Process Signature
+                let firmaUrl = null;
+                if (ticket.policiaFirma) {
+                    firmaUrl = await saveBase64Image(ticket.policiaFirma, 'firma');
+                }
+
+                // 2. Process Vehicles and Photos
+                // We need to map the vehicle creation data carefully to handle async image saving
+                const vehiclesData = [];
+
+                for (const v of ticket.vehicles) {
+                    const savedPhotos = [];
+                    for (const photoBase64 of v.fotos) {
+                        const photoUrl = await saveBase64Image(photoBase64, 'vehiculo');
+                        if (photoUrl) {
+                            savedPhotos.push({
+                                url: photoUrl,
+                                tipo: 'GENERAL'
+                            });
+                        }
+                    }
+
+                    vehiclesData.push({
+                        matricula: v.matricula,
+                        marca: v.marca,
+                        modelo: v.modelo,
+                        esMoto: v.esMoto,
+                        esSobrepeso: v.esSobrepeso,
+                        fotos: {
+                            create: savedPhotos
+                        }
+                    });
+                }
+
+                // 3. Create Albaran with processed data
                 const newAlbaran = await prisma.albaran.create({
                     data: {
                         tempId: ticket.id,
@@ -37,26 +106,16 @@ export async function POST(request: Request) {
                         fechaInicio: new Date(ticket.fechaInicio),
                         fechaFin: ticket.fechaFin ? new Date(ticket.fechaFin) : null,
                         policiaPlaca: ticket.policiaPlaca,
-                        policiaFirma: ticket.policiaFirma,
+                        policiaFirma: firmaUrl, // Store the URL, not Base64
                         estado: 'SINCRONIZADO',
                         vehiculos: {
-                            create: ticket.vehicles.map((v: LocalVehicle) => ({
-                                matricula: v.matricula,
-                                marca: v.marca,
-                                modelo: v.modelo,
-                                esMoto: v.esMoto,
-                                esSobrepeso: v.esSobrepeso,
-                                fotos: {
-                                    create: v.fotos.map((url: string) => ({
-                                        url: url, // In real app, upload blob/base64 to storage and get URL
-                                        tipo: 'GENERAL' // Default
-                                    }))
-                                }
-                            }))
+                            create: vehiclesData
                         }
                     }
                 });
+
                 results.push({ id: ticket.id, status: 'synced', serverId: newAlbaran.id });
+
             } catch (err) {
                 console.error("Error creating ticket:", err);
                 results.push({ id: ticket.id, status: 'error', error: String(err) });
