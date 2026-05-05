@@ -14,14 +14,9 @@ import { seedMasterData } from '@/lib/seed-client';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { v4 as uuidv4 } from 'uuid';
 
-export default function NewTicketPage() {
+function NewTicketForm() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
-    const [isMounted, setIsMounted] = useState(false);
-
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
 
     // Form State
     const [municipioId, setMunicipioId] = useState('');
@@ -90,7 +85,6 @@ export default function NewTicketPage() {
         router.push(`/ticket/${ticketId}`);
     };
 
-    if (!isMounted) return <div className="p-8 text-center">Iniciando...</div>;
     if (loading) return <div className="p-8 text-center">Cargando datos maestros...</div>;
 
     return (
@@ -192,4 +186,16 @@ export default function NewTicketPage() {
             </main>
         </div>
     );
+}
+
+export default function NewTicketPage() {
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    if (!isMounted) return <div className="p-8 text-center">Iniciando aplicación...</div>;
+
+    return <NewTicketForm />;
 }
